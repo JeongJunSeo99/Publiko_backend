@@ -26,7 +26,7 @@ public class InitializingBean {
                 log.info("Index {} already exists.", indexName);
             }
         } catch (IOException e) {
-            log.error("Error checking or creating index: {}", e.getMessage(), e);
+            log.error("Error checking or creating index.", e);
         }
     }
 }

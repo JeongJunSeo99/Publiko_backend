@@ -53,6 +53,10 @@ public class EmbeddingService {
         for (String sentence : sentences) {
           IntArrayList sentenceTokens = enc.encode(sentence);
 
+          if(sentenceTokens.size() > maxTokens) {
+            log.warn("Too many tokens in sentence: " + sentence);
+          }
+
           // 기존 청크에 추가할 경우 maxTokens를 초과하는지 확인
           if (chunkTokens.size() + sentenceTokens.size() > maxTokens) {
             // 새로운 chunk 생성
