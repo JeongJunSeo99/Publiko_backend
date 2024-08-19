@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
@@ -80,9 +79,14 @@ public class EsCacheService {
 
         return res.hits().hits().stream().map(r -> {
             Document source = r.source();
+            if (source == null) {
+                log.debug("'source' field is null from {}", r);
+                return null;
+            }
+
             source.getMetadata().put("distance", r.score().floatValue());
             return convertToCachedDto(source);
-        }).collect(Collectors.toList()).getFirst();
+        }).toList().getFirst();
 
     }
 
