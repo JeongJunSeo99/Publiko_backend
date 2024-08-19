@@ -1,5 +1,6 @@
 package com.kobot.backend.service;
 
+import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -24,8 +25,11 @@ public class CrawlingService {
 
         if (!visitedLinks.contains(url)) {
             visitedLinks.add(url);
+            
+            // 크롤링 할 url의 contentType 무시하는 설정
+            Connection connection = Jsoup.connect(url).ignoreContentType(true);
 
-            Document document = Jsoup.connect(url).get();
+            Document document = connection.get();
 
             // 텍스트 데이터 추출
             String text = document.body().text();
