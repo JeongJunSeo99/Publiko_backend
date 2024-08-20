@@ -18,7 +18,7 @@ public class CrawlingController {
     @GetMapping("/crawl")
     public String crawl(@RequestParam String url) {
         try {
-            crawlingService.crawl(url);
+            crawlingService.startCrawling(url);
             return "Crawling completed!";
         } catch (IOException e) {
             return "Failed to crawl the website: " + e.getMessage();

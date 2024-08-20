@@ -2,10 +2,16 @@ package com.kobot.backend.service;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 import org.jsoup.Connection;
+import org.jsoup.Connection.Response;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -22,13 +28,27 @@ import java.util.Set;
 public class CrawlingService {
 
     private Set<String> visitedLinks = new HashSet<>();
-    private String domain;
     private List<String> disallowedPaths = new ArrayList<>();
+    private static final int MAX_DEPTH = 5;
 
-    public void crawl(String url) throws IOException, URISyntaxException {
-        URI startUri = new URI(url);
-        domain = startUri.getHost();
+    // 사용자 input url parsing 과정이 중복되어 느려져서 해당 부분 분리
+    public void startCrawling(String startUrl) throws IOException, URISyntaxException {
+
+        // input된 url 인코딩 진행
+        String encodedUrl = encodeUrl(startUrl);
+        URI startUri = new URI(encodedUrl);
+        String domain = startUri.getHost();
+
+        // robots.txt 파일에서 Disallow 경로 가져오기
         loadRobotsTxt(startUri);
+
+        crawlPage(encodedUrl, domain, 0);
+    }
+
+    public void crawlPage(String url, String domain, int depth) throws IOException, URISyntaxException {
+        if (depth > MAX_DEPTH) {
+            return;
+        }
 
         if (!visitedLinks.contains(url)) {
             visitedLinks.add(url);
@@ -36,10 +56,9 @@ public class CrawlingService {
             // Disallow된 경로인지 확인
             if (isDisallowed(url))
                 return;
-            
+
             // 크롤링 할 url의 contentType 무시하는 설정
             Connection connection = Jsoup.connect(url).ignoreContentType(true);
-
             Document document = connection.get();
 
             // 텍스트 데이터 추출
@@ -51,12 +70,21 @@ public class CrawlingService {
 
             for (Element link : links) {
                 String absHref = link.attr("abs:href");
+                URI linkUri = null;
+
+                // url to uri 시 에러가 생기면 url 인코딩 후 uri로 변경
+                try{
+                    linkUri = new URI(absHref);
+                } catch (URISyntaxException e) {
+                    String encodedUrl = encodeUrl(absHref);
+                    linkUri = new URI(encodedUrl);
+                }
 
                 // 동일한 도메인에 속하는 URL만 크롤링
-                URI linkUri = new URI(absHref);
-                if (linkUri.getHost().equals(domain)) {
-                    crawl(absHref);
+                if (linkUri.getHost() != null && linkUri.getHost().equals(domain)) {
+                    crawlPage(absHref, domain, depth+1);
                 }
+
             }
         }
     }
@@ -89,6 +117,25 @@ public class CrawlingService {
                 return true;
         }
         return false;
+    }
+
+    private String encodeUrl(String url) throws IOException {
+        try {
+            // 전체 URL을 안전하게 인코딩
+            URL urlObj = new URL(url);
+            URI uri = new URI(
+                urlObj.getProtocol(),
+                urlObj.getUserInfo(),
+                urlObj.getHost(),
+                urlObj.getPort(),
+                urlObj.getPath(),
+                urlObj.getQuery(),  // 쿼리 부분만 따로 인코딩하지 않음
+                urlObj.getRef()
+            );
+            return uri.toASCIIString();  // 인코딩된 URL 반환
+        } catch (URISyntaxException | MalformedURLException e) {
+            throw new IOException("Failed to encode URL: " + url, e);
+        }
     }
 
 }
