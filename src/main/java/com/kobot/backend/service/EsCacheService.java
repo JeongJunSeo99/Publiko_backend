@@ -7,6 +7,7 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import com.kobot.backend.CacheDto;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -77,7 +78,7 @@ public class EsCacheService {
 
         log.debug("Score: {}", res.maxScore());
 
-        return res.hits().hits().stream().map(r -> {
+        List<CacheDto> cacheDtos = res.hits().hits().stream().map(r -> {
             Document source = r.source();
             if (source == null) {
                 log.debug("'source' field is null from {}", r);
@@ -86,8 +87,12 @@ public class EsCacheService {
 
             source.getMetadata().put("distance", r.score().floatValue());
             return convertToCachedDto(source);
-        }).toList().getFirst();
+        }).toList();
+        if (cacheDtos.isEmpty()) {
+            return null;
+        }
 
+        return cacheDtos.getFirst();
     }
 
     private CacheDto convertToCachedDto(Document doc) {
