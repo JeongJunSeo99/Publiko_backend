@@ -29,8 +29,8 @@ dependencies {
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
     implementation 'org.springframework.ai:spring-ai-tika-document-reader'
     implementation 'org.aspectj:aspectjrt'
-    implementation 'org.springframework.kafka:spring-kafka'
-
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.springframework.ai:spring-ai-redis-store-spring-boot-starter'
 
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'

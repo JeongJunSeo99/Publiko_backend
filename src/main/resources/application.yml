@@ -7,5 +7,10 @@ spring:
     uris: http://localhost:9200
     username: elastic
     password: changeme
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
   profiles:
     include: secret
