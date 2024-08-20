@@ -28,6 +28,13 @@ public class EsCacheService {
     private final float threshold = 0.8f;
     private final long topK = 1L;
 
+    /**
+     * 질의와 답변을 캐시합니다.
+     *
+     * @param query  질의
+     * @param answer 답변
+     * @return 캐시된 객체. 캐시 실패 시, null
+     */
     public CacheDto cache(String query, String answer) {
         // metadata set
         Map<String, Object> metadata = new HashMap<>();
@@ -57,6 +64,12 @@ public class EsCacheService {
         return convertToCachedDto(document);
     }
 
+    /**
+     * 질의와 유사한 질답을 캐시에서 꺼냅니다.
+     *
+     * @param query 질의
+     * @return 질답. cache miss 시, null
+     */
     public CacheDto getCached(String query) {
         float[] vectors = embeddingModel.embed(query);
 
