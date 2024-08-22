@@ -1,9 +1,5 @@
 package com.kobot.backend.service;
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch.core.BulkRequest;
-import co.elastic.clients.elasticsearch.core.bulk.BulkOperation;
-import co.elastic.clients.elasticsearch.core.bulk.IndexOperation;
 import com.knuddels.jtokkit.Encodings;
 import com.knuddels.jtokkit.api.Encoding;
 import com.knuddels.jtokkit.api.EncodingRegistry;
@@ -28,11 +24,8 @@ import org.springframework.web.multipart.MultipartFile;
 public class EmbeddingService {
 
   private final VectorStore vectorStore;
-  private final ElasticsearchClient client;
-  private final String indexName = "spring-ai-document-index";
 
   public void saveEmbedding(String text) {
-    createIndexIfNotExists();
     List<Document> documents = List.of(
         new Document(text)
     );
@@ -40,7 +33,6 @@ public class EmbeddingService {
   }
 
   public void savePdfEmbedding(MultipartFile file) {
-    createIndexIfNotExists();
     try {
       TikaDocumentReader tikaDocumentReader = new TikaDocumentReader(
           new InputStreamResource(file.getInputStream()));
@@ -53,58 +45,47 @@ public class EmbeddingService {
 
       for (Document doc : documents) {
         String content = doc.getContent();
-        IntArrayList tokens = enc.encode(content);
 
-        for (int i = 0; i < tokens.size(); i += maxTokens) {
-          int end = Math.min(i + maxTokens, tokens.size());
-          IntArrayList chunkTokens = new IntArrayList();
-          for (int j = i; j < end; j++) {
-            chunkTokens.add(tokens.get(j));
+        // 문장 단위로 분할
+        String[] sentences = content.split("(?<=[.?!])\\s*");
+        IntArrayList chunkTokens = new IntArrayList();
+
+        for (String sentence : sentences) {
+          IntArrayList sentenceTokens = enc.encode(sentence);
+
+          if(sentenceTokens.size() > maxTokens) {
+            log.warn("Too many tokens in sentence: " + sentence);
           }
-          String chunkText = enc.decode(chunkTokens);
 
-          Document splitDoc = new Document(chunkText, new HashMap<>(doc.getMetadata()));
-          splitDoc.getMetadata().put("chunk_id", i / maxTokens);
-          splitDocuments.add(splitDoc);
+          // 기존 청크에 추가할 경우 maxTokens를 초과하는지 확인
+          if (chunkTokens.size() + sentenceTokens.size() > maxTokens) {
+            // 새로운 chunk 생성
+            String chunkText = enc.decode(chunkTokens);
+            Document splitDoc = new Document(chunkText, new HashMap<>(doc.getMetadata()));
+            splitDocuments.add(splitDoc);
+
+            // 새로운 chunk 시작
+            chunkTokens = new IntArrayList();
+          }
+
+          // 수동으로 tokens를 추가
+          for (int j = 0; j < sentenceTokens.size(); j++) {
+            chunkTokens.add(sentenceTokens.get(j));
+          }
         }
 
+        // 마지막 chunk 처리
+        if (!chunkTokens.isEmpty()) {
+          String chunkText = enc.decode(chunkTokens);
+          Document splitDoc = new Document(chunkText, new HashMap<>(doc.getMetadata()));
+          splitDocuments.add(splitDoc);
+        }
       }
 
-      addDocuments(splitDocuments);
+      vectorStore.add(splitDocuments);
     } catch (IOException e) {
       log.error(e.getMessage());
     }
   }
 
-  private void addDocuments(List<Document> documents) throws IOException {
-    vectorStore.add(documents);
-    List<BulkOperation> operations = documents.stream()
-        .map(doc -> new BulkOperation.Builder()
-            .index(new IndexOperation.Builder<Document>()
-                .index("spring-ai-document-index")
-                .document(doc)
-                .build())
-            .build())
-        .toList();
-
-    BulkRequest request = new BulkRequest.Builder()
-        .operations(operations)
-        .build();
-
-    client.bulk(request);
-  }
-
-  private void createIndexIfNotExists() {
-    try {
-      boolean indexExists = client.indices().exists(b -> b.index(indexName)).value();
-      if (!indexExists) {
-        client.indices().create(c -> c.index(indexName));
-        log.info("Index {} created.", indexName);
-      } else {
-        log.info("Index {} already exists.", indexName);
-      }
-    } catch (IOException e) {
-      log.error("Error checking or creating index: {}", e.getMessage(), e);
-    }
-  }
 }
