@@ -40,7 +40,8 @@ public class CrawlingService {
         crawlPage(encodedUrl, domain, 0);
     }
 
-    public void crawlPage(String url, String domain, int depth) throws IOException, URISyntaxException {
+    public void crawlPage(String url, String domain, int depth) throws IOException
+        , URISyntaxException {
         if (depth > MAX_DEPTH) {
             return;
         }
@@ -90,7 +91,8 @@ public class CrawlingService {
         String robotsUrl = startUri.getScheme() + "://" + startUri.getHost() + "/robots.txt";
         String line;
 
-        try(BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(new URI(robotsUrl).toURL().openStream()))) {
+        try(BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(
+            new URI(robotsUrl).toURL().openStream()))) {
             while ((line = bufferedReader.readLine()) != null) {
                 line = line.trim();
                 if (line.startsWith("Disallow:")) {
