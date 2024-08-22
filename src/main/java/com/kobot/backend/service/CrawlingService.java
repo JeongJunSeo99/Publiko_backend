@@ -2,16 +2,11 @@ package com.kobot.backend.service;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Scanner;
 import org.jsoup.Connection;
-import org.jsoup.Connection.Response;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -61,6 +56,7 @@ public class CrawlingService {
             Connection connection = Jsoup.connect(url).ignoreContentType(true);
             Document document = connection.get();
 
+
             // 텍스트 데이터 추출
             String text = document.body().text();
             System.out.println("URL : " + url + " : " + text);
@@ -89,7 +85,7 @@ public class CrawlingService {
         }
     }
 
-    /* robots.txt 파일 로드 및 Disallow 경로 파싱 */
+    // robots.txt 파일 로드 및 Disallow 경로 파싱
     private void loadRobotsTxt(URI startUri) throws IOException {
         String robotsUrl = startUri.getScheme() + "://" + startUri.getHost() + "/robots.txt";
         String line;
@@ -107,7 +103,7 @@ public class CrawlingService {
         }
     }
 
-    /* 주어진 URL이 Disallow 목록에 있는지 확인 */
+    // 주어진 URL이 Disallow 목록에 있는지 확인
     private boolean isDisallowed(String url) throws URISyntaxException {
         URI uri = new URI(url);
         String path = uri.getPath();
@@ -119,6 +115,7 @@ public class CrawlingService {
         return false;
     }
 
+    // url에 있는 공백, 한글 인코딩
     private String encodeUrl(String url) throws IOException {
         try {
             // 전체 URL을 안전하게 인코딩
@@ -129,7 +126,7 @@ public class CrawlingService {
                 urlObj.getHost(),
                 urlObj.getPort(),
                 urlObj.getPath(),
-                urlObj.getQuery(),  // 쿼리 부분만 따로 인코딩하지 않음
+                urlObj.getQuery(),
                 urlObj.getRef()
             );
             return uri.toASCIIString();  // 인코딩된 URL 반환
