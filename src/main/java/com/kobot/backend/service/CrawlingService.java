@@ -2,10 +2,10 @@ package com.kobot.backend.service;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -19,29 +19,34 @@ import java.net.URISyntaxException;
 import java.util.HashSet;
 import java.util.Set;
 
+@Slf4j
 @Service
 public class CrawlingService {
 
     private Set<String> visitedLinks = new HashSet<>();
-    private List<String> disallowedPaths = new ArrayList<>();
     private static final int MAX_DEPTH = 5;
 
     // 사용자 input url parsing 과정이 중복되어 느려져서 해당 부분 분리
     public void startCrawling(String startUrl) throws IOException, URISyntaxException {
+
+        List<String> crawledData = new ArrayList<>();
 
         // input된 url 인코딩 진행
         String encodedUrl = encodeUrl(startUrl);
         URI startUri = new URI(encodedUrl);
         String domain = startUri.getHost();
 
-        // robots.txt 파일에서 Disallow 경로 가져오기
-        loadRobotsTxt(startUri);
+        List<String> disallowedPaths = new ArrayList<>();
 
-        crawlPage(encodedUrl, domain, 0);
+        // robots.txt 파일에서 Disallow 경로 가져오기
+        loadRobotsTxt(startUri, disallowedPaths);
+
+        crawlPage(encodedUrl, domain, 0, disallowedPaths, crawledData);
+
     }
 
-    public void crawlPage(String url, String domain, int depth) throws IOException
-        , URISyntaxException {
+    public void crawlPage(String url, String domain, int depth, List<String> disallowedPaths
+        , List<String> crawledData) throws IOException, URISyntaxException {
         if (depth > MAX_DEPTH) {
             return;
         }
@@ -49,45 +54,46 @@ public class CrawlingService {
         if (!visitedLinks.contains(url)) {
             visitedLinks.add(url);
 
-            // Disallow된 경로인지 확인
-            if (isDisallowed(url))
+            if (isDisallowed(url, disallowedPaths)) {
+                log.warn("URL is disallowed by robots.txt: {}", url);
                 return;
+            }
 
-            // 크롤링 할 url의 contentType 무시하는 설정
-            Connection connection = Jsoup.connect(url).ignoreContentType(true);
-            Document document = connection.get();
+            // 크롤링 시, 웹 콘텐츠가 삭제된 url에 대해 try-catch 구문을 작성해 크롤링 종료 안되게 처리
+            try {
+                // 크롤링 할 url의 contentType 무시하는 설정
+                Connection connection = Jsoup.connect(url).ignoreContentType(true);
+                Document document = connection.get();
 
+                String text = document.body().text();
+                crawledData.add(text);
 
-            // 텍스트 데이터 추출
-            String text = document.body().text();
-            System.out.println("URL : " + url + " : " + text);
+                Elements links = document.select("a[href]");
 
-            // 연결된 하이퍼링크 추출 후 재귀적으로 크롤링
-            Elements links = document.select("a[href]");
+                for (Element link : links) {
+                    String absHref = link.attr("abs:href");
+                    URI linkUri = null;
 
-            for (Element link : links) {
-                String absHref = link.attr("abs:href");
-                URI linkUri = null;
+                    try {
+                        linkUri = new URI(absHref);
+                    } catch (URISyntaxException e) {
+                        String encodedUrl = encodeUrl(absHref);
+                        linkUri = new URI(encodedUrl);
+                    }
 
-                // url to uri 시 에러가 생기면 url 인코딩 후 uri로 변경
-                try{
-                    linkUri = new URI(absHref);
-                } catch (URISyntaxException e) {
-                    String encodedUrl = encodeUrl(absHref);
-                    linkUri = new URI(encodedUrl);
+                    if (linkUri.getHost() != null && linkUri.getHost().equals(domain)) {
+                        crawlPage(absHref, domain, depth + 1, disallowedPaths, crawledData);
+                    }
                 }
-
-                // 동일한 도메인에 속하는 URL만 크롤링
-                if (linkUri.getHost() != null && linkUri.getHost().equals(domain)) {
-                    crawlPage(absHref, domain, depth+1);
-                }
-
+            } catch (IOException e) {
+                log.error("Failed to crawl the website: URL={}, Error Message={}", url
+                    , e.getMessage());
             }
         }
     }
 
     // robots.txt 파일 로드 및 Disallow 경로 파싱
-    private void loadRobotsTxt(URI startUri) throws IOException {
+    private void loadRobotsTxt(URI startUri, List<String> disallowedPaths) throws IOException {
         String robotsUrl = startUri.getScheme() + "://" + startUri.getHost() + "/robots.txt";
         String line;
 
@@ -101,12 +107,12 @@ public class CrawlingService {
                 }
             }
         } catch (IOException | URISyntaxException e) {
-            System.out.println("Failed to load robots.txt, assuming no restrictions.");
+            log.warn("Failed to load robots.txt, assuming no restrictions.");
         }
     }
 
     // 주어진 URL이 Disallow 목록에 있는지 확인
-    private boolean isDisallowed(String url) throws URISyntaxException {
+    private boolean isDisallowed(String url, List<String> disallowedPaths) throws URISyntaxException {
         URI uri = new URI(url);
         String path = uri.getPath();
 
@@ -118,23 +124,17 @@ public class CrawlingService {
     }
 
     // url에 있는 공백, 한글 인코딩
-    private String encodeUrl(String url) throws IOException {
-        try {
-            // 전체 URL을 안전하게 인코딩
-            URL urlObj = new URL(url);
-            URI uri = new URI(
-                urlObj.getProtocol(),
-                urlObj.getUserInfo(),
-                urlObj.getHost(),
-                urlObj.getPort(),
-                urlObj.getPath(),
-                urlObj.getQuery(),
-                urlObj.getRef()
-            );
-            return uri.toASCIIString();  // 인코딩된 URL 반환
-        } catch (URISyntaxException | MalformedURLException e) {
-            throw new IOException("Failed to encode URL: " + url, e);
-        }
+    private String encodeUrl(String url) throws URISyntaxException, IOException {
+        URL urlObj = new URL(url);
+        URI uri = new URI(
+            urlObj.getProtocol(),
+            urlObj.getUserInfo(),
+            urlObj.getHost(),
+            urlObj.getPort(),
+            urlObj.getPath(),
+            urlObj.getQuery(),
+            urlObj.getRef()
+        );
+        return uri.toASCIIString();  // 인코딩된 URL 반환
     }
-
 }
