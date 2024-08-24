@@ -7,4 +7,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface HostUrlRepository extends JpaRepository<HostUrl, Integer> {
     HostUrl findByHostUrl(String hostUrl);
+
+    HostUrl findByHostUrlId(int i);
 }

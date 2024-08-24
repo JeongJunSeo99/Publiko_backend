@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -17,15 +18,15 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
 
 @RestController
+@RequestMapping("/crawl")
 public class CrawlingController {
 
     @Autowired
     private CrawlingService crawlingService;
 
-    @GetMapping("/crawl/auto")
+    @GetMapping("/auto")
     public String crawl(@RequestParam String url) throws IOException {
         try {
             crawlingService.startCrawling(url);
@@ -37,7 +38,7 @@ public class CrawlingController {
         }
     }
 
-    @GetMapping("/crawl/download")
+    @GetMapping("/download")
     public ResponseEntity<InputStreamResource> crawlAndDownload(@RequestParam String url) {
         try {
             List<String> subLinks = crawlingService.startDownloadCrawling(url);
@@ -58,6 +59,18 @@ public class CrawlingController {
             return new ResponseEntity<>(new InputStreamResource(inputStream), headers, HttpStatus.OK);
         } catch (IOException | URISyntaxException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @GetMapping("/newContent")
+    public String crawl() throws IOException {
+        try {
+            crawlingService.newContentCrawling();
+            return "Crawling completed!";
+        } catch (IOException e) {
+            return "Failed to crawl the website: " + e.getMessage();
+        } catch (URISyntaxException e) {
+            throw new RuntimeException(e);
         }
     }
 

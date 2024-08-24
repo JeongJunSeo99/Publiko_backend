@@ -319,5 +319,15 @@ public class CrawlingService {
             everydayCrawling(hostUrl);
 
     }
+    
+    // 사용자가 원할 때, 새롭게 추가된 웹페이지 내용 크롤링 하는 기능
+    public void newContentCrawling() throws IOException, URISyntaxException {
+        List<HostUrl> hostUrls = hostUrlRepository.findAll();
+
+        for (HostUrl hostUrl : hostUrls)
+            everydayCrawling(hostUrl);
+
+    }
+
 
 }
