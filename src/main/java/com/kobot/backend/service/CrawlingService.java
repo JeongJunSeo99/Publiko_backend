@@ -8,15 +8,15 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -25,9 +25,11 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.HashSet;
 import java.util.Set;
+import org.springframework.ai.vectorstore.VectorStore;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class CrawlingService {
 
     @Autowired
@@ -36,12 +38,15 @@ public class CrawlingService {
     @Autowired
     private SubUrlsRepository subUrlsRepository;
 
+    @Autowired
+    private final VectorStore vectorStore;
+
     private static final int MAX_DEPTH = 5;
 
     // 사용자 input url parsing 과정이 중복되어 느려져서 해당 부분 분리
     public void startCrawling(String startUrl) throws IOException, URISyntaxException {
-
-        Map<String, String> subLinks = new HashMap<>();
+        Set<String> visitLinks = new HashSet<>();
+        List<String> crawlDatas = new ArrayList<>();
 
         // input된 url 인코딩 진행
         String encodedUrl = encodeUrl(startUrl);
@@ -53,20 +58,58 @@ public class CrawlingService {
         // robots.txt 파일에서 Disallow 경로 가져오기
         loadRobotsTxt(startUri, disallowedPaths);
 
-        crawlPage(encodedUrl, domain, 0, disallowedPaths, subLinks);
+        crawlPage(encodedUrl, domain, 0, disallowedPaths, visitLinks, crawlDatas);
 
         // DB에 저장
-        saveToDatabase(startUrl, subLinks);
+        saveToDatabase(startUrl, visitLinks);
 
+        List<org.springframework.ai.document.Document> documents = convertToDocuments(visitLinks);
+
+        vectorStore.add(documents);
+    }
+
+    public List<org.springframework.ai.document.Document> convertToDocuments(Set<String> visitLinks)
+    {
+        List<org.springframework.ai.document.Document> documents = new ArrayList<>();
+
+        for (String url : visitLinks) {
+            org.springframework.ai.document.Document document =
+                new org.springframework.ai.document.Document(url);
+        }
+
+        return documents;
+    }
+
+    public List<String> startDownloadCrawling(String startUrl) throws IOException, URISyntaxException {
+        Set<String> visitLinks = new HashSet<>();
+        List<String> crawlDatas = new ArrayList<>();
+
+        // input된 url 인코딩 진행
+        String encodedUrl = encodeUrl(startUrl);
+        URI startUri = new URI(encodedUrl);
+        String domain = startUri.getHost();
+
+        List<String> disallowedPaths = new ArrayList<>();
+
+        // robots.txt 파일에서 Disallow 경로 가져오기
+        loadRobotsTxt(startUri, disallowedPaths);
+
+        crawlPage(encodedUrl, domain, 0, disallowedPaths, visitLinks, crawlDatas);
+
+        // DB에 저장
+        saveToDatabase(startUrl, visitLinks);
+
+        return crawlDatas;
     }
 
     public void crawlPage(String url, String domain, int depth, List<String> disallowedPaths
-        , Map<String, String> subLinks) throws IOException, URISyntaxException {
+        , Set<String> visitLinks, List<String> crawlDatas) throws IOException, URISyntaxException {
         if (depth > MAX_DEPTH) {
             return;
         }
 
-        if (!subLinks.containsKey(url)) {
+        if (!visitLinks.contains(url)) {
+            visitLinks.add(url);
 
             if (isDisallowed(url, disallowedPaths)) {
                 log.warn("URL is disallowed by robots.txt: {}", url);
@@ -80,7 +123,7 @@ public class CrawlingService {
                 Document document = connection.get();
 
                 String text = document.body().text();
-                subLinks.put(url, text);  // URL과 크롤링된 텍스트를 Map에 저장
+                crawlDatas.add(text);
 
                 Elements links = document.select("a[href]");
 
@@ -96,7 +139,7 @@ public class CrawlingService {
                     }
 
                     if (linkUri.getHost() != null && linkUri.getHost().equals(domain))
-                        crawlPage(absHref, domain, depth + 1, disallowedPaths, subLinks);
+                        crawlPage(absHref, domain, depth + 1, disallowedPaths, visitLinks, crawlDatas);
 
                 }
             } catch (IOException e) {
@@ -152,7 +195,7 @@ public class CrawlingService {
         return uri.toASCIIString();  // 인코딩된 URL 반환
     }
 
-    private void saveToDatabase(String startUrl, Map<String, String> subLinks) {
+    private void saveToDatabase(String startUrl, Set<String> subLinks) {
 
         HostUrl hostUrl = hostUrlRepository.findByHostUrl(startUrl);
         if (hostUrl == null) {
@@ -162,14 +205,14 @@ public class CrawlingService {
         }
 
         // SubUrls 엔티티 저장
-        for (Map.Entry<String, String> entry : subLinks.entrySet()) {
-            if (!entry.getKey().equals(startUrl)) {
-                String subUrlKey = entry.getKey();
+        for (String link : subLinks) {
+            if (!link.equals(startUrl)) {
 
-                SubUrls existingSubUrl = subUrlsRepository.findByHostUrlAndSubUrl(hostUrl, subUrlKey);
+//                SubUrls existingSubUrl = subUrlsRepository.findByHostUrlAndSubUrl(hostUrl, subUrlKey);
+                SubUrls existingSubUrl = subUrlsRepository.findBySubUrl(link);
                 if (existingSubUrl == null) {
                     SubUrls subUrl = new SubUrls();
-                    subUrl.setSubUrl(subUrlKey);
+                    subUrl.setSubUrl(link);
                     subUrl.setHostUrl(hostUrl);
                     subUrlsRepository.save(subUrl);
                 }

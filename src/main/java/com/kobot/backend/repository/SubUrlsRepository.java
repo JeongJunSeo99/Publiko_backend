@@ -8,4 +8,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface SubUrlsRepository extends JpaRepository<SubUrls, Integer> {
     SubUrls findByHostUrlAndSubUrl(HostUrl hostUrl, String subUrl);
+
+    SubUrls findBySubUrl(String subUrlKey);
 }
