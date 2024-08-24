@@ -4,7 +4,9 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
@@ -23,13 +25,13 @@ import java.util.Set;
 @Service
 public class CrawlingService {
 
-    private Set<String> visitedLinks = new HashSet<>();
+
     private static final int MAX_DEPTH = 5;
 
     // 사용자 input url parsing 과정이 중복되어 느려져서 해당 부분 분리
     public void startCrawling(String startUrl) throws IOException, URISyntaxException {
 
-        List<String> crawledData = new ArrayList<>();
+        Map<String, String> subLinks = new HashMap<>();
 
         // input된 url 인코딩 진행
         String encodedUrl = encodeUrl(startUrl);
@@ -41,18 +43,21 @@ public class CrawlingService {
         // robots.txt 파일에서 Disallow 경로 가져오기
         loadRobotsTxt(startUri, disallowedPaths);
 
-        crawlPage(encodedUrl, domain, 0, disallowedPaths, crawledData);
+        crawlPage(encodedUrl, domain, 0, disallowedPaths, subLinks);
+
+        for (Map.Entry<String, String> entry : subLinks.entrySet()) {
+            System.out.println("Key: " + entry.getKey() + ", Value: " + entry.getValue());
+        }
 
     }
 
     public void crawlPage(String url, String domain, int depth, List<String> disallowedPaths
-        , List<String> crawledData) throws IOException, URISyntaxException {
+        , Map<String, String> subLinks) throws IOException, URISyntaxException {
         if (depth > MAX_DEPTH) {
             return;
         }
 
-        if (!visitedLinks.contains(url)) {
-            visitedLinks.add(url);
+        if (!subLinks.containsKey(url)) {
 
             if (isDisallowed(url, disallowedPaths)) {
                 log.warn("URL is disallowed by robots.txt: {}", url);
@@ -66,7 +71,7 @@ public class CrawlingService {
                 Document document = connection.get();
 
                 String text = document.body().text();
-                crawledData.add(text);
+                subLinks.put(url, text);  // URL과 크롤링된 텍스트를 Map에 저장
 
                 Elements links = document.select("a[href]");
 
@@ -81,9 +86,9 @@ public class CrawlingService {
                         linkUri = new URI(encodedUrl);
                     }
 
-                    if (linkUri.getHost() != null && linkUri.getHost().equals(domain)) {
-                        crawlPage(absHref, domain, depth + 1, disallowedPaths, crawledData);
-                    }
+                    if (linkUri.getHost() != null && linkUri.getHost().equals(domain))
+                        crawlPage(absHref, domain, depth + 1, disallowedPaths, subLinks);
+
                 }
             } catch (IOException e) {
                 log.error("Failed to crawl the website: URL={}, Error Message={}", url

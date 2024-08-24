@@ -1,0 +1,1 @@
+docker run --name mysql-container -e MYSQL_ROOT_PASSWORD=publiko -e MYSQL_DATABASE=crawlingdb -p 3308:3306 -d mysql:8.0

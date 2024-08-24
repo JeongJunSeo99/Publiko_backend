@@ -14,3 +14,17 @@ spring:
 
   profiles:
     include: secret
+
+
+  datasource:
+    url: jdbc:mysql://localhost:3308/crawlingdb
+    username: root
+    password: publiko
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+      properties:
+        hibernate:
+          dialect: org.hibernate.dialect.MySQL8Dialect
+      hibernate:
+        ddl-auto: create-drop
+      show-sql: true
