@@ -1,10 +1,10 @@
 package com.kobot.backend.config;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import com.kobot.backend.query.cache.AbstractQueryCacheFactory;
+import com.kobot.backend.query.cache.AbstractQueryCacheFactory.DistanceMetric;
+import com.kobot.backend.query.cache.AbstractQueryCacheFactory.NeighborMetric;
 import com.kobot.backend.query.cache.QueryCache;
-import com.kobot.backend.query.cache.QueryCacheFactory;
-import com.kobot.backend.query.cache.QueryCacheFactory.DistanceMetric;
-import com.kobot.backend.query.cache.QueryCacheFactory.NeighborMetric;
 import com.kobot.backend.query.cache.elasticsearch.ElasticsearchQueryCacheFactory;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,7 +19,7 @@ public class CacheConfig {
 
     @Bean
     public QueryCache getQueryCache(ElasticsearchClient esClient, EmbeddingModel embeddingModel) {
-        QueryCacheFactory elasticsearchQueryCacheFactory = new ElasticsearchQueryCacheFactory(
+        AbstractQueryCacheFactory elasticsearchQueryCacheFactory = new ElasticsearchQueryCacheFactory(
             esClient);
 
         return elasticsearchQueryCacheFactory.create(embeddingModel, DistanceMetric.COSINE,

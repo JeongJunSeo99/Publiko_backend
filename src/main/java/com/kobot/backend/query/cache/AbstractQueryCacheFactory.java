@@ -2,7 +2,7 @@ package com.kobot.backend.query.cache;
 
 import org.springframework.ai.embedding.EmbeddingModel;
 
-public abstract class QueryCacheFactory {
+public abstract class AbstractQueryCacheFactory {
 
     // TODO Metric은 객체 하나로 묶어서 받기
     public abstract QueryCache create(

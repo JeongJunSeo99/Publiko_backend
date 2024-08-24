@@ -1,11 +1,11 @@
 package com.kobot.backend.query.cache.elasticsearch;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import com.kobot.backend.query.cache.AbstractQueryCacheFactory;
 import com.kobot.backend.query.cache.QueryCache;
-import com.kobot.backend.query.cache.QueryCacheFactory;
 import org.springframework.ai.embedding.EmbeddingModel;
 
-public class ElasticsearchQueryCacheFactory extends QueryCacheFactory {
+public class ElasticsearchQueryCacheFactory extends AbstractQueryCacheFactory {
 
     private final ElasticsearchClient esClient;
 
