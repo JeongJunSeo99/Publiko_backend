@@ -14,3 +14,9 @@ spring:
 
   profiles:
     include: secret
+
+com:
+  kobot:
+    query:
+      cache:
+        threshold: 0.8
