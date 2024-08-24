@@ -33,8 +33,8 @@ public class ElasticsearchCosineKnnQueryCache implements QueryCache {
 
     private final float threshold = 0.8f;
 
-    @Value("com.kobot.query.cache.elasticsearch.index-name")
-    private String indexName = "kobot-user-query-index"; // FIXME pojo로
+    @Value("${com.kobot.query.cache.elasticsearch.index-name:kobot-user-query-index}")
+    private String indexName;
 
     private final long topK = 1L;
 
