@@ -97,12 +97,12 @@ public class ElasticsearchCosineKnnQueryCache implements QueryCache {
                         .numCandidates((long) (1.5 * topK))
                     ),
                 Document.class);
-        } catch (IOException e) {
-            log.error("", e);
+        } catch (Exception e) {
+            log.error("Geting answer from cache is failed.", e);
             return null;
         }
 
-        log.debug("Score: {}", res.maxScore());
+        log.debug("Search result: {}", res);
 
         // TODO 아래 공통화
         List<CacheDto> cacheDtos = res.hits().hits().stream().map(r -> {
