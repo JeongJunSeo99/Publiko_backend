@@ -52,7 +52,7 @@ public class CrawlingController {
             InputStream inputStream = new ByteArrayInputStream(bytes);
 
             HttpHeaders headers = new HttpHeaders();
-            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=subLinks.txt");
+            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename = crawling.txt");
             headers.add(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_PLAIN_VALUE);
             headers.add(HttpHeaders.CONTENT_LENGTH, String.valueOf(bytes.length));
 

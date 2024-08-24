@@ -41,6 +41,7 @@ public class CrawlingService {
 
     // 사용자 input url parsing 과정이 중복되어 느려져서 해당 부분 분리
     public void startCrawling(String startUrl) throws IOException, URISyntaxException {
+
         Set<String> visitLinks = new HashSet<>();
         List<String> crawlDatas = new ArrayList<>();
 
@@ -68,6 +69,7 @@ public class CrawlingService {
 
     // 기존의 URL과 비교하여 새롭게 발견된 URL만 크롤링
     public void everydayCrawling(HostUrl hostUrl) throws IOException, URISyntaxException {
+
         Map<String, String> newCrawlSet = new HashMap<>();
 
         String encodedUrl = encodeUrl(hostUrl.getHostUrl());
@@ -100,6 +102,7 @@ public class CrawlingService {
     }
 
     public List<String> startDownloadCrawling(String startUrl) throws IOException, URISyntaxException {
+
         Set<String> visitLinks = new HashSet<>();
         List<String> crawlDatas = new ArrayList<>();
 
@@ -123,6 +126,7 @@ public class CrawlingService {
 
     public void crawlPage(String url, String domain, int depth, List<String> disallowedPaths
         , Set<String> visitLinks, List<String> crawlDatas) throws IOException, URISyntaxException {
+
         if (depth > MAX_DEPTH) {
             return;
         }
@@ -170,6 +174,7 @@ public class CrawlingService {
 
     public void crawlPage(String url, String domain, int depth, List<String> disallowedPaths
         , Map<String, String> newCrawlDatas) throws IOException, URISyntaxException {
+
         if (depth > MAX_DEPTH) {
             return;
         }
@@ -221,8 +226,10 @@ public class CrawlingService {
 
         try(BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(
             new URI(robotsUrl).toURL().openStream()))) {
+
             while ((line = bufferedReader.readLine()) != null) {
                 line = line.trim();
+
                 if (line.startsWith("Disallow:")) {
                     String disallowPath = line.split(":", 2)[1].trim();
                     disallowedPaths.add(disallowPath);
@@ -242,11 +249,13 @@ public class CrawlingService {
             if (path.startsWith(disallowedPath))
                 return true;
         }
+
         return false;
     }
 
     // url에 있는 공백, 한글 인코딩
     private String encodeUrl(String url) throws URISyntaxException, IOException {
+
         URL urlObj = new URL(url);
         URI uri = new URI(
             urlObj.getProtocol(),
@@ -257,12 +266,14 @@ public class CrawlingService {
             urlObj.getQuery(),
             urlObj.getRef()
         );
+
         return uri.toASCIIString();  // 인코딩된 URL 반환
     }
 
     private void saveToDatabase(String startUrl, Set<String> subLinks) {
 
         HostUrl hostUrl = hostUrlRepository.findByHostUrl(startUrl);
+
         if (hostUrl == null) {
             hostUrl = new HostUrl();
             hostUrl.setHostUrl(startUrl);
@@ -272,8 +283,8 @@ public class CrawlingService {
         // SubUrls 엔티티 저장
         for (String link : subLinks) {
             if (!link.equals(startUrl)) {
-
                 SubUrls existingSubUrl = subUrlsRepository.findBySubUrl(link);
+
                 if (existingSubUrl == null) {
                     SubUrls subUrl = new SubUrls();
                     subUrl.setSubUrl(link);
@@ -328,6 +339,4 @@ public class CrawlingService {
             everydayCrawling(hostUrl);
 
     }
-
-
 }
