@@ -8,7 +8,9 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Connection;
@@ -17,7 +19,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -25,20 +27,14 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.HashSet;
 import java.util.Set;
-import org.springframework.ai.vectorstore.VectorStore;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class CrawlingService {
 
-    @Autowired
-    private HostUrlRepository hostUrlRepository;
-
-    @Autowired
-    private SubUrlsRepository subUrlsRepository;
-
-    @Autowired
+    private final HostUrlRepository hostUrlRepository;
+    private final SubUrlsRepository subUrlsRepository;
     private final VectorStore vectorStore;
 
     private static final int MAX_DEPTH = 5;
@@ -65,19 +61,42 @@ public class CrawlingService {
 
         List<org.springframework.ai.document.Document> documents = convertToDocuments(visitLinks);
 
-        vectorStore.add(documents);
+        documents.forEach(x -> System.out.println(x.toString()));
+        log.info("vectorStroe.add() 실행");
+//        vectorStore.add(documents);
     }
 
-    public List<org.springframework.ai.document.Document> convertToDocuments(Set<String> visitLinks)
-    {
-        List<org.springframework.ai.document.Document> documents = new ArrayList<>();
+    // 기존의 URL과 비교하여 새롭게 발견된 URL만 크롤링
+    public void everydayCrawling(HostUrl hostUrl) throws IOException, URISyntaxException {
+        Map<String, String> newCrawlSet = new HashMap<>();
 
-        for (String url : visitLinks) {
-            org.springframework.ai.document.Document document =
-                new org.springframework.ai.document.Document(url);
+        String encodedUrl = encodeUrl(hostUrl.getHostUrl());
+        URI startUri = new URI(encodedUrl);
+        String domain = startUri.getHost();
+
+        List<String> disallowedPaths = new ArrayList<>();
+        loadRobotsTxt(startUri, disallowedPaths);
+
+        crawlPage(encodedUrl, domain, 0, disallowedPaths, newCrawlSet);
+
+        Set<String> existingSubUrls = new HashSet<>();
+
+        for (SubUrls subUrl : subUrlsRepository.findByHostUrl(hostUrl))
+            existingSubUrls.add(subUrl.getSubUrl());
+
+        // 새롭게 발견된 URL들만 필터링
+        Set<String> newVisitLinks = new HashSet<>(newCrawlSet.keySet());
+        newVisitLinks.removeAll(existingSubUrls);
+
+        if (!newVisitLinks.isEmpty()) {
+            saveToDatabase(hostUrl.getHostUrl(), newVisitLinks);
+
+            List<org.springframework.ai.document.Document> documents = convertToDocuments(newCrawlSet);
+
+            documents.forEach(x -> System.out.println(x.toString()));
+            log.info("vectorStroe.add() 실행");
+//            vectorStore.add(documents);
         }
-
-        return documents;
     }
 
     public List<String> startDownloadCrawling(String startUrl) throws IOException, URISyntaxException {
@@ -149,6 +168,52 @@ public class CrawlingService {
         }
     }
 
+    public void crawlPage(String url, String domain, int depth, List<String> disallowedPaths
+        , Map<String, String> newCrawlDatas) throws IOException, URISyntaxException {
+        if (depth > MAX_DEPTH) {
+            return;
+        }
+
+        if (!newCrawlDatas.containsKey(url)) {
+
+            if (isDisallowed(url, disallowedPaths)) {
+                log.warn("URL is disallowed by robots.txt: {}", url);
+                return;
+            }
+
+            // 크롤링 시, 웹 콘텐츠가 삭제된 url에 대해 try-catch 구문을 작성해 크롤링 종료 안되게 처리
+            try {
+                // 크롤링 할 url의 contentType 무시하는 설정
+                Connection connection = Jsoup.connect(url).ignoreContentType(true);
+                Document document = connection.get();
+
+                String text = document.body().text();
+                newCrawlDatas.put(url, text);
+
+                Elements links = document.select("a[href]");
+
+                for (Element link : links) {
+                    String absHref = link.attr("abs:href");
+                    URI linkUri = null;
+
+                    try {
+                        linkUri = new URI(absHref);
+                    } catch (URISyntaxException e) {
+                        String encodedUrl = encodeUrl(absHref);
+                        linkUri = new URI(encodedUrl);
+                    }
+
+                    if (linkUri.getHost() != null && linkUri.getHost().equals(domain))
+                        crawlPage(absHref, domain, depth + 1, disallowedPaths, newCrawlDatas);
+
+                }
+            } catch (IOException e) {
+                log.error("Failed to crawl the website: URL={}, Error Message={}", url
+                    , e.getMessage());
+            }
+        }
+    }
+
     // robots.txt 파일 로드 및 Disallow 경로 파싱
     private void loadRobotsTxt(URI startUri, List<String> disallowedPaths) throws IOException {
         String robotsUrl = startUri.getScheme() + "://" + startUri.getHost() + "/robots.txt";
@@ -208,7 +273,6 @@ public class CrawlingService {
         for (String link : subLinks) {
             if (!link.equals(startUrl)) {
 
-//                SubUrls existingSubUrl = subUrlsRepository.findByHostUrlAndSubUrl(hostUrl, subUrlKey);
                 SubUrls existingSubUrl = subUrlsRepository.findBySubUrl(link);
                 if (existingSubUrl == null) {
                     SubUrls subUrl = new SubUrls();
@@ -219,4 +283,41 @@ public class CrawlingService {
             }
         }
     }
+
+    public List<org.springframework.ai.document.Document> convertToDocuments(Set<String> visitLinks)
+    {
+        List<org.springframework.ai.document.Document> documents = new ArrayList<>();
+
+        for (String url : visitLinks) {
+            org.springframework.ai.document.Document document =
+                new org.springframework.ai.document.Document(url);
+            documents.add(document);
+        }
+
+        return documents;
+    }
+
+    private List<org.springframework.ai.document.Document> convertToDocuments(
+        Map<String, String> crawlData) {
+        List<org.springframework.ai.document.Document> documents = new ArrayList<>();
+
+        for (Map.Entry<String, String> entry : crawlData.entrySet()) {
+            org.springframework.ai.document.Document document =
+                new org.springframework.ai.document.Document(entry.getValue());
+            documents.add(document);
+        }
+
+        return documents;
+    }
+
+    // 매일 크롤링 수행
+    @Scheduled(cron = "0 0 0 * * ?") // 매일 자정에 실행
+    public void scheduledCrawling() throws IOException, URISyntaxException {
+        List<HostUrl> hostUrls = hostUrlRepository.findAll();
+
+        for (HostUrl hostUrl : hostUrls)
+            everydayCrawling(hostUrl);
+
+    }
+
 }
