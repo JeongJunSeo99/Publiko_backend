@@ -1,5 +1,9 @@
 package com.kobot.backend.service;
 
+import com.kobot.backend.entity.HostUrl;
+import com.kobot.backend.entity.SubUrls;
+import com.kobot.backend.repository.HostUrlRepository;
+import com.kobot.backend.repository.SubUrlsRepository;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.URL;
@@ -13,6 +17,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -25,6 +30,11 @@ import java.util.Set;
 @Service
 public class CrawlingService {
 
+    @Autowired
+    private HostUrlRepository hostUrlRepository;
+
+    @Autowired
+    private SubUrlsRepository subUrlsRepository;
 
     private static final int MAX_DEPTH = 5;
 
@@ -45,9 +55,8 @@ public class CrawlingService {
 
         crawlPage(encodedUrl, domain, 0, disallowedPaths, subLinks);
 
-        for (Map.Entry<String, String> entry : subLinks.entrySet()) {
-            System.out.println("Key: " + entry.getKey() + ", Value: " + entry.getValue());
-        }
+        // DB에 저장
+        saveToDatabase(startUrl, subLinks);
 
     }
 
@@ -141,5 +150,30 @@ public class CrawlingService {
             urlObj.getRef()
         );
         return uri.toASCIIString();  // 인코딩된 URL 반환
+    }
+
+    private void saveToDatabase(String startUrl, Map<String, String> subLinks) {
+
+        HostUrl hostUrl = hostUrlRepository.findByHostUrl(startUrl);
+        if (hostUrl == null) {
+            hostUrl = new HostUrl();
+            hostUrl.setHostUrl(startUrl);
+            hostUrl = hostUrlRepository.save(hostUrl);
+        }
+
+        // SubUrls 엔티티 저장
+        for (Map.Entry<String, String> entry : subLinks.entrySet()) {
+            if (!entry.getKey().equals(startUrl)) {
+                String subUrlKey = entry.getKey();
+
+                SubUrls existingSubUrl = subUrlsRepository.findByHostUrlAndSubUrl(hostUrl, subUrlKey);
+                if (existingSubUrl == null) {
+                    SubUrls subUrl = new SubUrls();
+                    subUrl.setSubUrl(subUrlKey);
+                    subUrl.setHostUrl(hostUrl);
+                    subUrlsRepository.save(subUrl);
+                }
+            }
+        }
     }
 }

@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Data;
@@ -13,7 +14,7 @@ import lombok.NoArgsConstructor;
 
 
 @Entity
-@Table(name = "suburls")
+@Table(name = "tbl_suburls")
 @Data
 @NoArgsConstructor
 public class SubUrls {
@@ -25,9 +26,6 @@ public class SubUrls {
 
     @Column(name = "suburl")
     private String subUrl;
-
-    @Column(name = "suburl_text")
-    private String subUrlText;
 
     @ManyToOne
     @JoinColumn(name = "hosturl_id")
