@@ -143,6 +143,7 @@ public class ElasticsearchCosineKnnQueryCache implements QueryCache {
         }
     }
 
+    // TODO DTO쪽에 static 메소드로 선언하기
     private CacheDto convertToCachedDto(Document doc) {
         Map<String, Object> metadata = doc.getMetadata();
         Object distance = metadata.get("distance");

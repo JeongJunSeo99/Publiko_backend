@@ -21,9 +21,11 @@ public class CacheConfig {
     public QueryCache getQueryCache(ElasticsearchClient esClient, EmbeddingModel embeddingModel) {
         QueryCacheFactory elasticsearchQueryCacheFactory = new ElasticsearchQueryCacheFactory(
             esClient);
-        
+
         return elasticsearchQueryCacheFactory.create(embeddingModel, DistanceMetric.COSINE,
             NeighborMetric.KNN,
             threshold);
     }
+
+    // TODO scheduler 추가 - Cache 주기적으로 referesh
 }
