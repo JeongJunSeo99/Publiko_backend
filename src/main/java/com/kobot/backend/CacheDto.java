@@ -15,4 +15,5 @@ public class CacheDto {
     private String query;
     private String answer;
     private float distance;
+    private long timestamp;
 }
