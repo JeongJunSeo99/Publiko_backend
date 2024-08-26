@@ -5,9 +5,16 @@ import com.kobot.backend.entity.SubUrls;
 import com.kobot.backend.repository.HostUrlRepository;
 import com.kobot.backend.repository.SubUrlsRepository;
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.io.InputStreamReader;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,7 +25,6 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -35,15 +41,13 @@ public class CrawlingService {
 
     private final HostUrlRepository hostUrlRepository;
     private final SubUrlsRepository subUrlsRepository;
-    private final VectorStore vectorStore;
 
-    private static final int MAX_DEPTH = 5;
+    private static final int MAX_DEPTH = 1;
 
     // 사용자 input url parsing 과정이 중복되어 느려져서 해당 부분 분리
-    public void startCrawling(String startUrl) throws IOException, URISyntaxException {
+    public void crawling(String startUrl) throws IOException, URISyntaxException {
 
         Set<String> visitLinks = new HashSet<>();
-        List<String> crawlDatas = new ArrayList<>();
 
         // input된 url 인코딩 진행
         String encodedUrl = encodeUrl(startUrl);
@@ -55,16 +59,39 @@ public class CrawlingService {
         // robots.txt 파일에서 Disallow 경로 가져오기
         loadRobotsTxt(startUri, disallowedPaths);
 
-        crawlPage(encodedUrl, domain, 0, disallowedPaths, visitLinks, crawlDatas);
+        // 현재 시각을 기준으로 폴더 생성
+        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        Path folderPath = Paths.get("crawl_results", timestamp);
+        Files.createDirectories(folderPath);
+
+        // 크롤링 시작
+        crawlPageToFile(encodedUrl, domain, 0, disallowedPaths, visitLinks, folderPath);
+    }
+
+    public void autoCrawling(String startUrl) throws IOException, URISyntaxException {
+
+        Set<String> visitLinks = new HashSet<>();
+
+        // input된 url 인코딩 진행
+        String encodedUrl = encodeUrl(startUrl);
+        URI startUri = new URI(encodedUrl);
+        String domain = startUri.getHost();
+
+        List<String> disallowedPaths = new ArrayList<>();
+
+        // robots.txt 파일에서 Disallow 경로 가져오기
+        loadRobotsTxt(startUri, disallowedPaths);
+
+        // 현재 시각을 기준으로 폴더 생성
+        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        Path folderPath = Paths.get("crawl_results", timestamp);
+        Files.createDirectories(folderPath);
+
+        // 크롤링 시작
+        crawlPageToFile(encodedUrl, domain, 0, disallowedPaths, visitLinks, folderPath);
 
         // DB에 저장
         saveToDatabase(startUrl, visitLinks);
-
-        List<org.springframework.ai.document.Document> documents = convertToDocuments(visitLinks);
-
-        documents.forEach(x -> System.out.println(x.toString()));
-        log.info("vectorStroe.add() 실행");
-//        vectorStore.add(documents);
     }
 
     // 기존의 URL과 비교하여 새롭게 발견된 URL만 크롤링
@@ -79,7 +106,7 @@ public class CrawlingService {
         List<String> disallowedPaths = new ArrayList<>();
         loadRobotsTxt(startUri, disallowedPaths);
 
-        crawlPage(encodedUrl, domain, 0, disallowedPaths, newCrawlSet);
+        getCrawlUrl(encodedUrl, domain, 0, disallowedPaths, newCrawlSet);
 
         Set<String> existingSubUrls = new HashSet<>();
 
@@ -90,42 +117,22 @@ public class CrawlingService {
         Set<String> newVisitLinks = new HashSet<>(newCrawlSet.keySet());
         newVisitLinks.removeAll(existingSubUrls);
 
-        if (!newVisitLinks.isEmpty()) {
+        if (!newVisitLinks.isEmpty()){
+            // 현재 시각을 기준으로 폴더 생성
+            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+            Path folderPath = Paths.get("crawl_results", hostUrl.getHostUrl() + timestamp);
+            Files.createDirectories(folderPath);
+
             saveToDatabase(hostUrl.getHostUrl(), newVisitLinks);
 
-            List<org.springframework.ai.document.Document> documents = convertToDocuments(newCrawlSet);
-
-            documents.forEach(x -> System.out.println(x.toString()));
-            log.info("vectorStroe.add() 실행");
-//            vectorStore.add(documents);
+            for (String newLink : newVisitLinks) {
+                crawlPageToFileOneDepth(newLink, domain, disallowedPaths, folderPath);
+            }
         }
     }
 
-    public List<String> startDownloadCrawling(String startUrl) throws IOException, URISyntaxException {
-
-        Set<String> visitLinks = new HashSet<>();
-        List<String> crawlDatas = new ArrayList<>();
-
-        // input된 url 인코딩 진행
-        String encodedUrl = encodeUrl(startUrl);
-        URI startUri = new URI(encodedUrl);
-        String domain = startUri.getHost();
-
-        List<String> disallowedPaths = new ArrayList<>();
-
-        // robots.txt 파일에서 Disallow 경로 가져오기
-        loadRobotsTxt(startUri, disallowedPaths);
-
-        crawlPage(encodedUrl, domain, 0, disallowedPaths, visitLinks, crawlDatas);
-
-        // DB에 저장
-        saveToDatabase(startUrl, visitLinks);
-
-        return crawlDatas;
-    }
-
-    public void crawlPage(String url, String domain, int depth, List<String> disallowedPaths
-        , Set<String> visitLinks, List<String> crawlDatas) throws IOException, URISyntaxException {
+    public void crawlPageToFile(String url, String domain, int depth, List<String> disallowedPaths
+        , Set<String> visitLinks, Path folderPath) throws IOException, URISyntaxException {
 
         if (depth > MAX_DEPTH) {
             return;
@@ -141,28 +148,56 @@ public class CrawlingService {
 
             // 크롤링 시, 웹 콘텐츠가 삭제된 url에 대해 try-catch 구문을 작성해 크롤링 종료 안되게 처리
             try {
+
                 // 크롤링 할 url의 contentType 무시하는 설정
                 Connection connection = Jsoup.connect(url).ignoreContentType(true);
                 Document document = connection.get();
 
+                // HTML의 <title> 태그에서 제목 추출
+                String title = document.title();
+                if (title == null || title.isEmpty()) {
+                    title = "no_title";  // 제목이 없을 경우 기본 이름 지정
+                }
+
                 String text = document.body().text();
-                crawlDatas.add(text);
+
+                // 제목을 파일명으로 변환 (파일 시스템에 허용되지 않는 문자는 제거하지 않음)
+                String safeFileName = title.replaceAll("[<>:\"/\\|?*]", "_").trim();
+                if (safeFileName.length() > 255) {
+                    safeFileName = safeFileName.substring(0, 255);  // 파일 이름 길이 제한
+                }
+
+                // 파일 이름의 중복을 방지
+                Path filePath = getUniqueFilePath(folderPath, safeFileName);
+
+                // 텍스트를 파일로 저장. 만약 파일 이름에 문제가 생기면 log만 찍고 재진행
+                try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath.toFile()))) {
+                    writer.write(text);
+                } catch (IOException e) {
+                    log.error("Failed to write to file: URL={}, Error Message={}", url, e.getMessage());
+                }
 
                 Elements links = document.select("a[href]");
 
                 for (Element link : links) {
                     String absHref = link.attr("abs:href");
-                    URI linkUri = null;
 
+                    // URL이 상대 경로인 경우 base URL을 사용하여 절대 URL로 변환
                     try {
-                        linkUri = new URI(absHref);
-                    } catch (URISyntaxException e) {
-                        String encodedUrl = encodeUrl(absHref);
-                        linkUri = new URI(encodedUrl);
-                    }
+                        URI baseUri = new URI(url);
+                        URI linkUri = new URI(absHref);
 
-                    if (linkUri.getHost() != null && linkUri.getHost().equals(domain))
-                        crawlPage(absHref, domain, depth + 1, disallowedPaths, visitLinks, crawlDatas);
+                        // 상대 경로가 포함된 경우 절대 경로로 변환
+                        URI resolvedUri = baseUri.resolve(linkUri);
+                        String resolvedUrl = resolvedUri.toString();
+
+                        // 링크의 호스트가 도메인과 일치하는지 확인
+                        if (resolvedUri.getHost() != null && resolvedUri.getHost().equals(domain)) {
+                            crawlPageToFile(resolvedUrl, domain, depth + 1, disallowedPaths, visitLinks, folderPath);
+                        }
+                    } catch (URISyntaxException e) {
+                        System.err.println("Invalid URL format: " + absHref);
+                    }
 
                 }
             } catch (IOException e) {
@@ -172,7 +207,52 @@ public class CrawlingService {
         }
     }
 
-    public void crawlPage(String url, String domain, int depth, List<String> disallowedPaths
+    public void crawlPageToFileOneDepth(String url, String domain, List<String> disallowedPaths
+        , Path folderPath) throws URISyntaxException {
+
+        if (isDisallowed(url, disallowedPaths)) {
+            log.warn("URL is disallowed by robots.txt: {}", url);
+            return;
+        }
+
+        // 크롤링 시, 웹 콘텐츠가 삭제된 url에 대해 try-catch 구문을 작성해 크롤링 종료 안되게 처리
+        try {
+
+            // 크롤링 할 url의 contentType 무시하는 설정
+            Connection connection = Jsoup.connect(url).ignoreContentType(true);
+            Document document = connection.get();
+
+            // HTML의 <title> 태그에서 제목 추출
+            String title = document.title();
+            if (title == null || title.isEmpty()) {
+                title = "no_title";  // 제목이 없을 경우 기본 이름 지정
+            }
+
+            String text = document.body().text();
+
+            // 제목을 파일명으로 변환 (파일 시스템에 허용되지 않는 문자는 제거하지 않음)
+            String safeFileName = title.replaceAll("[<>:\"/\\|?*]", "_").trim();
+            if (safeFileName.length() > 255) {
+                safeFileName = safeFileName.substring(0, 255);  // 파일 이름 길이 제한
+            }
+
+            // 파일 이름의 중복을 방지
+            Path filePath = getUniqueFilePath(folderPath, safeFileName);
+
+            // 텍스트를 파일로 저장. 만약 파일 이름에 문제가 생기면 log만 찍고 재진행
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath.toFile()))) {
+                writer.write(text);
+            } catch (IOException e) {
+                log.error("Failed to write to file: URL={}, Error Message={}", url, e.getMessage());
+            }
+
+        } catch (IOException e) {
+            log.error("Failed to crawl the website: URL={}, Error Message={}", url
+                , e.getMessage());
+        }
+    }
+
+    public void getCrawlUrl(String url, String domain, int depth, List<String> disallowedPaths
         , Map<String, String> newCrawlDatas) throws IOException, URISyntaxException {
 
         if (depth > MAX_DEPTH) {
@@ -188,29 +268,34 @@ public class CrawlingService {
 
             // 크롤링 시, 웹 콘텐츠가 삭제된 url에 대해 try-catch 구문을 작성해 크롤링 종료 안되게 처리
             try {
+
                 // 크롤링 할 url의 contentType 무시하는 설정
                 Connection connection = Jsoup.connect(url).ignoreContentType(true);
                 Document document = connection.get();
 
-                String text = document.body().text();
-                newCrawlDatas.put(url, text);
-
                 Elements links = document.select("a[href]");
 
                 for (Element link : links) {
+
                     String absHref = link.attr("abs:href");
-                    URI linkUri = null;
 
+                    // URL이 상대 경로인 경우 base URL을 사용하여 절대 URL로 변환
                     try {
-                        linkUri = new URI(absHref);
+                        URI baseUri = new URI(url);
+                        URI linkUri = new URI(absHref);
+
+                        // 상대 경로가 포함된 경우 절대 경로로 변환
+                        URI resolvedUri = baseUri.resolve(linkUri);
+                        String resolvedUrl = resolvedUri.toString();
+
+                        // 링크의 호스트가 도메인과 일치하는지 확인
+                        if (resolvedUri.getHost() != null && resolvedUri.getHost().equals(domain)) {
+                            getCrawlUrl(absHref, domain, depth + 1, disallowedPaths, newCrawlDatas);
+                        }
+
                     } catch (URISyntaxException e) {
-                        String encodedUrl = encodeUrl(absHref);
-                        linkUri = new URI(encodedUrl);
+                        System.err.println("Invalid URL format: " + absHref);
                     }
-
-                    if (linkUri.getHost() != null && linkUri.getHost().equals(domain))
-                        crawlPage(absHref, domain, depth + 1, disallowedPaths, newCrawlDatas);
-
                 }
             } catch (IOException e) {
                 log.error("Failed to crawl the website: URL={}, Error Message={}", url
@@ -295,32 +380,6 @@ public class CrawlingService {
         }
     }
 
-    public List<org.springframework.ai.document.Document> convertToDocuments(Set<String> visitLinks)
-    {
-        List<org.springframework.ai.document.Document> documents = new ArrayList<>();
-
-        for (String url : visitLinks) {
-            org.springframework.ai.document.Document document =
-                new org.springframework.ai.document.Document(url);
-            documents.add(document);
-        }
-
-        return documents;
-    }
-
-    private List<org.springframework.ai.document.Document> convertToDocuments(
-        Map<String, String> crawlData) {
-        List<org.springframework.ai.document.Document> documents = new ArrayList<>();
-
-        for (Map.Entry<String, String> entry : crawlData.entrySet()) {
-            org.springframework.ai.document.Document document =
-                new org.springframework.ai.document.Document(entry.getValue());
-            documents.add(document);
-        }
-
-        return documents;
-    }
-
     // 매일 크롤링 수행
     @Scheduled(cron = "0 0 0 * * ?") // 매일 자정에 실행
     public void scheduledCrawling() throws IOException, URISyntaxException {
@@ -328,15 +387,19 @@ public class CrawlingService {
 
         for (HostUrl hostUrl : hostUrls)
             everydayCrawling(hostUrl);
-
     }
-    
-    // 사용자가 원할 때, 새롭게 추가된 웹페이지 내용 크롤링 하는 기능
-    public void newContentCrawling() throws IOException, URISyntaxException {
-        List<HostUrl> hostUrls = hostUrlRepository.findAll();
 
-        for (HostUrl hostUrl : hostUrls)
-            everydayCrawling(hostUrl);
+    private Path getUniqueFilePath(Path folderPath, String fileName) throws IOException {
+        Path filePath = folderPath.resolve(fileName + ".txt");
+        int counter = 1;
 
+        // 파일 이름 중복 체크 및 고유한 파일 이름 생성
+        while (Files.exists(filePath)) {
+            String newFileName = fileName + "_" + counter;
+            filePath = folderPath.resolve(newFileName + ".txt");
+            counter++;
+        }
+
+        return filePath;
     }
 }

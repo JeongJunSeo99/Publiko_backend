@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,10 +27,10 @@ public class CrawlingController {
     @Autowired
     private CrawlingService crawlingService;
 
-    @GetMapping("/auto")
+    @GetMapping()
     public String crawl(@RequestParam String url) throws IOException {
         try {
-            crawlingService.startCrawling(url);
+            crawlingService.crawling(url);
             return "Crawling completed!";
         } catch (IOException e) {
             return "Failed to crawl the website: " + e.getMessage();
@@ -38,34 +39,10 @@ public class CrawlingController {
         }
     }
 
-    @GetMapping("/download")
-    public ResponseEntity<InputStreamResource> crawlAndDownload(@RequestParam String url) {
+    @GetMapping("/auto")
+    public String crawlAuto(@RequestParam String url) throws IOException {
         try {
-            List<String> subLinks = crawlingService.startDownloadCrawling(url);
-
-            StringBuilder sb = new StringBuilder();
-
-            for (String data : subLinks)
-                sb.append("Content:\n").append(data).append("\n\n");
-
-            byte[] bytes = sb.toString().getBytes(StandardCharsets.UTF_8);
-            InputStream inputStream = new ByteArrayInputStream(bytes);
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename = crawling.txt");
-            headers.add(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_PLAIN_VALUE);
-            headers.add(HttpHeaders.CONTENT_LENGTH, String.valueOf(bytes.length));
-
-            return new ResponseEntity<>(new InputStreamResource(inputStream), headers, HttpStatus.OK);
-        } catch (IOException | URISyntaxException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
-    @GetMapping("/newContent")
-    public String crawl() throws IOException {
-        try {
-            crawlingService.newContentCrawling();
+            crawlingService.autoCrawling(url);
             return "Crawling completed!";
         } catch (IOException e) {
             return "Failed to crawl the website: " + e.getMessage();
@@ -73,6 +50,4 @@ public class CrawlingController {
             throw new RuntimeException(e);
         }
     }
-
-
 }

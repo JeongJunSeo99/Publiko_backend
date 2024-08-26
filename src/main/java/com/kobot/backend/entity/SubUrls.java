@@ -24,6 +24,7 @@ public class SubUrls {
     @Column(name = "suburl_id")
     private int subUrlId;
 
+    @Lob
     @Column(name = "suburl")
     private String subUrl;
 
