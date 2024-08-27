@@ -3,7 +3,6 @@ package com.kobot.backend.controller;
 import com.kobot.backend.service.PromptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -13,12 +12,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class PromptController {
 
-  private final PromptService promptService;
+    private final PromptService promptService;
 
-  @PostMapping("/chat")
-  public String getQueryResult(@RequestBody String query) {
-    log.info(query);
-    ChatResponse chatResponse = promptService.getChatResponse(query);
-    return chatResponse.getResult().getOutput().getContent();
-  }
+    @PostMapping("/chat")
+    public String getQueryResult(@RequestBody String query) {
+        log.info(query);
+        return promptService.getChatResponse(query);
+    }
 }
