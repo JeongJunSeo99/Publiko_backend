@@ -160,6 +160,7 @@ public class CrawlingService {
                 }
 
                 String text = document.body().text();
+                log.info(text);
 
                 // 제목을 파일명으로 변환 (파일 시스템에 허용되지 않는 문자는 제거하지 않음)
                 String safeFileName = title.replaceAll("[<>:\"/\\|?*]", "_").trim();
@@ -175,6 +176,7 @@ public class CrawlingService {
                 try {
                     BufferedWriter writer = new BufferedWriter(new FileWriter(filePath.toFile()));
                     writer.write(text);
+                    writer.flush();
                 } catch (IOException e) {
                     log.error("Failed to write to file: URL={}, Error Message={}", url, e.getMessage());
                 }
@@ -198,7 +200,7 @@ public class CrawlingService {
                             crawlPageToFile(resolvedUrl, domain, depth + 1, disallowedPaths, visitLinks, folderPath);
                         }
                     } catch (URISyntaxException e) {
-                        System.err.println("Invalid URL format: " + absHref);
+                        log.warn("Invalid URL format: {}", absHref);
                     }
 
                 }
@@ -245,6 +247,7 @@ public class CrawlingService {
             try {
                 BufferedWriter writer = new BufferedWriter(new FileWriter(filePath.toFile()));
                 writer.write(text);
+                writer.flush();
             } catch (IOException e) {
                 log.error("Failed to write to file: URL={}, Error Message={}", url, e.getMessage());
             }
