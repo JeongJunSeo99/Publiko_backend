@@ -163,6 +163,7 @@ public class CrawlingService {
 
                 // 제목을 파일명으로 변환 (파일 시스템에 허용되지 않는 문자는 제거하지 않음)
                 String safeFileName = title.replaceAll("[<>:\"/\\|?*]", "_").trim();
+
                 if (safeFileName.length() > 255) {
                     safeFileName = safeFileName.substring(0, 255);  // 파일 이름 길이 제한
                 }
@@ -171,7 +172,8 @@ public class CrawlingService {
                 Path filePath = getUniqueFilePath(folderPath, safeFileName);
 
                 // 텍스트를 파일로 저장. 만약 파일 이름에 문제가 생기면 log만 찍고 재진행
-                try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath.toFile()))) {
+                try {
+                    BufferedWriter writer = new BufferedWriter(new FileWriter(filePath.toFile()));
                     writer.write(text);
                 } catch (IOException e) {
                     log.error("Failed to write to file: URL={}, Error Message={}", url, e.getMessage());
@@ -240,7 +242,8 @@ public class CrawlingService {
             Path filePath = getUniqueFilePath(folderPath, safeFileName);
 
             // 텍스트를 파일로 저장. 만약 파일 이름에 문제가 생기면 log만 찍고 재진행
-            try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath.toFile()))) {
+            try {
+                BufferedWriter writer = new BufferedWriter(new FileWriter(filePath.toFile()));
                 writer.write(text);
             } catch (IOException e) {
                 log.error("Failed to write to file: URL={}, Error Message={}", url, e.getMessage());
@@ -309,8 +312,9 @@ public class CrawlingService {
         String robotsUrl = startUri.getScheme() + "://" + startUri.getHost() + "/robots.txt";
         String line;
 
-        try(BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(
-            new URI(robotsUrl).toURL().openStream()))) {
+        try {
+            BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(
+                new URI(robotsUrl).toURL().openStream()));
 
             while ((line = bufferedReader.readLine()) != null) {
                 line = line.trim();
