@@ -54,6 +54,7 @@ public class RedisCacheService {
      * @return 질답. cache miss 시, null
      */
     public CacheDto getCached(String query) {
+        log.info("Get cached query: {}", query);
         List<Document> documents = vectorStore.similaritySearch(
             SearchRequest
                 .query(query)
