@@ -29,4 +29,5 @@
     - PR과 code review로 프로젝트를 관리합니다.
 
 ## 🛠 아키텍처
-![image](https://github.com/user-attachments/assets/efad815a-7b1a-4dbb-8fd6-07fd9fbdcb2b)
+![image](https://github.com/user-attachments/assets/637d40fe-c1c5-4da9-9dd2-be4026a7c2ba)
+
